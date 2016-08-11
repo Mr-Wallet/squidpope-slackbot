@@ -1,3 +1,6 @@
+# pm2 script
+start.sh
+
 # Logs
 logs
 *.log
