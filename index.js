@@ -4,7 +4,8 @@ const _ = require('lodash');
 const moment = require('moment');
 
 const BOT_TOKEN = require('./token.js');
-const SLACKUP_CHANNEL_ID = 'C0P38P755';
+const SQUID_POPE_CHANNEL_ID = 'C0P38P755';
+const SQUID_POPE_USER = 'U04CT4Y06'; // jordan_wallet
 const LOGGING_LEVEL = 1;
 const VERBOSE_LOGGING = 2;
 
@@ -18,8 +19,8 @@ const bot = controller.spawn({
   token: BOT_TOKEN
 });
 
-const Database = require('./src/Database.js')(controller, bot, SLACKUP_CHANNEL_ID, LOGGING_LEVEL);
-const Message = require('./src/Message.js')(controller, bot, SLACKUP_CHANNEL_ID);
+const Database = require('./src/Database.js')(controller, bot, SQUID_POPE_CHANNEL_ID, LOGGING_LEVEL);
+const Message = require('./src/Message.js')(controller, bot, SQUID_POPE_CHANNEL_ID, SQUID_POPE_USER);
 const Util = require('./src/Util.js')(LOGGING_LEVEL);
 
 
@@ -40,6 +41,10 @@ bot.startRTM((error /* , _bot, _payload */) => {
 });
 
 controller.hears([/.+/], ['direct_message'], (_bot, message) => {
-  Util.log('unmatched', `Received unmatched message from user ${message.user}`, VERBOSE_LOGGING);
-  Message.private(message.user, 'SquidPope is operational.');
+  Util.log('message', `Passing along message from user ${message.user}`, VERBOSE_LOGGING);
+  bot.api.users.infoAsync({ user: message.user })
+    .then(({ user: sender }) => {
+      Util.log('message', `${sender.name} told @squidpope: ${message.text}`);
+      Message.squidPope(`${sender.name}: ${message.text}`);
+    });
 });
