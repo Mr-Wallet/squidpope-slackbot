@@ -1,13 +1,64 @@
 const Promise = require('bluebird');
 const _ = require('lodash');
+const fse = Promise.promisifyAll(require('fs-extra'));
 const moment = require('moment');
 
+const POPES_FILE = './squid_popes.json';
 const VERBOSE_LOGGING = 2;
 
 module.exports = (controller, bot, SLACKUP_CHANNEL_ID, LOGGING_LEVEL = 1) => {
   const Util = require('./Util.js')(LOGGING_LEVEL); // eslint-disable-line global-require
 
   const Database = {
+    addSquidPope: ({ id }) => {
+      Util.log('Database', 'addSquidPope called.', VERBOSE_LOGGING);
+      return Database.getPopes()
+        .then((popes) => {
+          if (_.includes(popes, id)) {
+            return Promise.reject('That user is already in the pope queue!');
+          }
+          popes.push(id);
+          return Database.setPopes(popes);
+        })
+        .then(() => id);
+    },
+
+    ensurePopesFile: () => {
+      try {
+        const stats = fse.statSync(POPES_FILE);
+        if (stats.isFile()) {
+          return Promise.resolve();
+        }
+      } catch (e) {
+        // fall through
+      }
+
+      return fse.writeJsonAsync(POPES_FILE, { popes: [] });
+    },
+
+    getPopes: () =>
+      Database.ensurePopesFile()
+        .then(() => fse.readJsonAsync(POPES_FILE))
+        .then(({ popes }) => popes),
+
+    removeSquidPope: ({ id }) => {
+      Util.log('Database', 'removeSquidPope called.', VERBOSE_LOGGING);
+      return Database.getPopes()
+        .then((popes) => {
+          if (!_.includes(popes, id)) {
+            return Promise.reject('That user is not in the squid popes queue!');
+          }
+          _.pull(popes, id);
+          return Database.setPopes(popes);
+        })
+        .then(() => id);
+    },
+
+    setPopes: (popes) =>
+      Database.ensurePopesFile()
+        .then(() => fse.writeJsonAsync(POPES_FILE, { popes }))
+        .then(() => popes),
+
     /**
      * @param {Object} newData An object that will be merged with the existing slackup channel data.
      *                         Recursively, no defined properties in newData ought to resolve to `undefined`;
@@ -38,49 +89,6 @@ module.exports = (controller, bot, SLACKUP_CHANNEL_ID, LOGGING_LEVEL = 1) => {
           return controller.storage.channels.saveAsync(record)
             .then(() => record);
         });
-    },
-
-  /**
-   * @param {Boolean} skipKnownMembers An optimization to not hammer the api with user info requests.
-   *                                   User info is unlikely to change over time, so we can skip it a lot and only cause
-   *                                   teeny tiny UX bugs by not detecting user info changes after the bot is loaded.
-   *                                   This is an internal tool so teeny tiny bugs aren't a big deal.
-   */
-    updateChannelMembers: (skipKnownMembers) => {
-      Util.log('Database', `updateChannelMembers called, skipKnownMembers: ${skipKnownMembers}`, VERBOSE_LOGGING);
-      return bot.api.channels.infoAsync({ channel: SLACKUP_CHANNEL_ID })
-        .then((channelInfo) => {
-          if (skipKnownMembers) {
-            return controller.storage.channels.getAsync(SLACKUP_CHANNEL_ID)
-              .catch((reason) => {
-                Util.log('Database',
-                  'updateChannelMembers: Could not load channel record, continuing with empty data. Reason follows:');
-                Util.log('Database', reason);
-                return {};
-              })
-              .then(({ userInfo }) =>
-                _.filter(channelInfo.channel.members, (value, key) => !_.keys(userInfo).includes(key))
-              );
-          }
-
-          return channelInfo.channel.members;
-        })
-        .then((members) => {
-          const promises = _(members).map((user) =>
-            bot.api.users.infoAsync({ user })
-              .then((_info) => [user, _info.user])
-          );
-          return Promise.all(promises);
-        })
-        .then((pairs) => {
-          const userInfo = _(pairs)
-            .fromPairs()
-            .omitBy(({ is_bot }) => is_bot) // eslint-disable-line camelcase
-            .value();
-
-          return Database.updateChannelRecord({ userInfo });
-        })
-        .then(({ userInfo }) => userInfo);
     }
   };
 
