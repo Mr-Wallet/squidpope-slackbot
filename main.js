@@ -4,13 +4,12 @@ const _ = require('lodash');
 const moment = require('moment');
 
 const BOT_TOKEN = require('./token.js');
-const SQUID_POPE_CHANNEL_ID = 'C0P38P755';
-const SQUID_POPE_USER = 'U04CT4Y06'; // jordan_wallet
+const {
+  ONLY_ERROR_LOGGING,
+  NORMAL_LOGGING,
+  VERBOSE_LOGGING
+} = require('./resources/logging-constants');
 
-/* ### LOGGING DEFINITIONS / CONFIG ### */
-const ONLY_ERROR_LOGGING = 0;
-const NORMAL_LOGGING = 1;
-const VERBOSE_LOGGING = 2;
 
 // NOTE EDIT THIS TO CHANGE LOGGING AMOUNT
 const LOGGING_LEVEL = NORMAL_LOGGING;
@@ -26,9 +25,9 @@ const bot = controller.spawn({
   token: BOT_TOKEN
 });
 
-const Database = require('./src/Database.js')(controller, bot, SQUID_POPE_CHANNEL_ID, LOGGING_LEVEL);
-const Message = require('./src/Message.js')(controller, bot, SQUID_POPE_CHANNEL_ID, SQUID_POPE_USER);
-const Util = require('./src/Util.js')(LOGGING_LEVEL);
+const Database = require('./source/Database.js')(controller, bot, LOGGING_LEVEL);
+const Message = require('./source/Message.js')(controller, bot, LOGGING_LEVEL);
+const Util = require('./source/Util.js')(LOGGING_LEVEL);
 
 
 /* ### PROMISIFY API CALLS - turns e.g. channels.info into channels.infoAsync which returns a promise ### */
@@ -171,11 +170,12 @@ registerCommand('list', (message, log) =>
     })
 );
 
-controller.hears([/.+/], ['direct_message'], (_bot, message) => {
-  Util.log('message', `Passing along message from user ${message.user}`, VERBOSE_LOGGING);
+controller.hears([/.+/], ['direct_message', 'mention'], (_bot, message) => {
+  Util.log('message', `Passively got a mention/message from ${message.user}`, VERBOSE_LOGGING);
   bot.api.users.infoAsync({ user: message.user })
     .then(({ user: sender }) => {
-      Util.log('message', `${sender.name} told @squidpope: ${message.text}`);
-      Message.squidPope(`${sender.name}: ${message.text}`);
+      const channelName = 'private message';
+      Util.log('message', `${sender.name}, @squidpope via ${channelName}: ${message.text}`);
+      Message.squidPope(`${sender.name} (${channelName}): ${message.text}`);
     });
 });
