@@ -6,8 +6,14 @@ const moment = require('moment');
 const BOT_TOKEN = require('./token.js');
 const SQUID_POPE_CHANNEL_ID = 'C0P38P755';
 const SQUID_POPE_USER = 'U04CT4Y06'; // jordan_wallet
-const LOGGING_LEVEL = 1;
+
+/* ### LOGGING DEFINITIONS / CONFIG ### */
+const ONLY_ERROR_LOGGING = 0;
+const NORMAL_LOGGING = 1;
 const VERBOSE_LOGGING = 2;
+
+// NOTE EDIT THIS TO CHANGE LOGGING AMOUNT
+const LOGGING_LEVEL = NORMAL_LOGGING;
 
 
 /* ### MESSY GLOBAL VARIABLES ### */
@@ -32,6 +38,11 @@ bot.api.im = Promise.promisifyAll(bot.api.im);
 bot.api.users = Promise.promisifyAll(bot.api.users);
 controller.storage.channels = Promise.promisifyAll(controller.storage.channels);
 controller.storage.users = Promise.promisifyAll(controller.storage.users);
+
+// Helper that should really be part of the slack API to begin with
+const getUserByName = (userName) =>
+  bot.api.users.listAsync({})
+    .then(({ members }) => _.find(members, ({ name }) => name === userName) || null);
 
 /* ### INITALIZE BOT ### */
 bot.startRTM((error /* , _bot, _payload */) => {
@@ -67,7 +78,7 @@ const registerCommand = (command, callback, types = ['direct_message']) => {
       .catch((reason) => {
         const errorMessage = _.get(reason, 'message', reason);
         log(reason, VERBOSE_LOGGING);
-        log(`Failed for reason: ${errorMessage}`);
+        log(`Failed for reason: ${errorMessage}`, ONLY_ERROR_LOGGING);
         Message.private(message.user, errorMessage);
       });
   });
@@ -84,9 +95,8 @@ registerCommand('addPope', (message, log, _popeName) => {
 
   const popeName = _popeName[0] === '@' ? _popeName.substring(1) : _popeName;
 
-  return bot.api.users.listAsync({})
-    .then(({ members }) => {
-      const popeUser = _.find(members, (member) => member.name === popeName);
+  return getUserByName(popeName)
+    .then((popeUser) => {
       if (!popeUser) {
         log(`User ${popeName} was not found, so no pope was added.`);
         return Promise.reject('User not found on slack - no user added.');
@@ -115,9 +125,8 @@ registerCommand('removePope', (message, log, _popeName) => {
 
   const popeName = _popeName[0] === '@' ? _popeName.substring(1) : _popeName;
 
-  return bot.api.users.listAsync({})
-    .then(({ members }) => {
-      const popeUser = _.find(members, (member) => member.name === popeName);
+  return getUserByName(popeName)
+    .then((popeUser) => {
       if (!popeUser) {
         log(`User ${popeName} was not found, so no pope was removed.`);
         return Promise.reject('User not found on slack - no user removed.');
@@ -134,6 +143,33 @@ registerCommand('removePope', (message, log, _popeName) => {
       );
     });
 });
+
+registerCommand('list', (message, log) =>
+  Promise.all([bot.api.users.listAsync({}), Database.getPopes()])
+    .then(([{ members }, popes]) => {
+      const humanReadablePopes = _.map(popes, (popeId) => _.find(members, ({ id }) => id === popeId).name);
+      log(`${message.user} was given the squid pope list`);
+      log(`Squid pope list is as follows: ${JSON.stringify(humanReadablePopes)}`, VERBOSE_LOGGING);
+      if (!humanReadablePopes.length) {
+        Message.private(message.user, 'There are no squid popes registered! Use `addPope [user_name]` to add one.');
+        return;
+      }
+      if (humanReadablePopes.length === 1) {
+        Message.private(message.user, `The only registered squid pope is ${humanReadablePopes[0]}.`);
+        return;
+      }
+      const currentPope = humanReadablePopes.shift();
+      let popeMessage = `The current pope is ${currentPope}.`;
+      if (humanReadablePopes.length === 1) {
+        popeMessage += `\nThe off-duty pope is ${humanReadablePopes[0]}`;
+      } else {
+        const lastPope = humanReadablePopes.pop();
+        popeMessage += `\nThe upcoming popes, in order, are ${_.join(humanReadablePopes, ', ')}` +
+          `${humanReadablePopes.length > 1 ? ',' : ''} and ${lastPope}`;
+      }
+      Message.private(message.user, popeMessage);
+    })
+);
 
 controller.hears([/.+/], ['direct_message'], (_bot, message) => {
   Util.log('message', `Passing along message from user ${message.user}`, VERBOSE_LOGGING);
