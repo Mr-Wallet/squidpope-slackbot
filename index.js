@@ -40,88 +40,98 @@ bot.startRTM((error /* , _bot, _payload */) => {
   }
 });
 
-controller.hears([/addPope .+/], ['direct_message'], (_bot, message) => {
-  let popeName = message.text.split(' ')[1].toLowerCase();
-  if (popeName[0] === '@') {
-    popeName = popeName.substring(1);
-  }
+/**
+ * Convenience method for setting up a command that the bot will respond to, complete with easy logging/errors.
+ * @param {String} command The first word the bot hears, which is the "command".
+ *                         Not case sensitive except for what gets logged.
+ * @param {Function} callback What the command does. This MUST RETURN A PROMISE. registerCommand tacks a `catch` on the
+ *                            end of the callback for error handling, so the meat of the callback should be promisified.
+ *                            callback takes the arguments (message, log, ...params) where:
+ *                              message is the slack API message object
+ *                              log is Util.log, partially applied with `command` as its first parameter - use this for
+ *                                  logging to ensure that log output is consistent (avoids copy-paste errors).
+ *                              ...params all of the space-separated words the user sent with the command.
+ *                                        If the user said 'myCommand a b c' then params are 'a', 'b', 'c'.
+ * @param {Array | String} types (optional) The 2nd parameter to controller.hears (i.e. the type(s) of message/mention)
+ *                               See https://github.com/howdyai/botkit#matching-patterns-and-keywords-with-hears
+ */
+const registerCommand = (command, callback, types = ['direct_message']) => {
+  const commandRegExp = new RegExp(`^${command}(\\b.+)?$`, 'i');
 
-  if (!popeName) {
-    Util.log(
-      'addPope',
+  controller.hears([commandRegExp], types, (_bot, message) => {
+    const params = message.text.split(' ');
+    params.shift();
+    const log = _.partial(Util.log, command);
+    log(`Received request from ${message.user}: ${message.text}`);
+    callback(message, log, ...params)
+      .catch((reason) => {
+        const errorMessage = _.get(reason, 'message', reason);
+        log(reason, VERBOSE_LOGGING);
+        log(`Failed for reason: ${errorMessage}`);
+        Message.private(message.user, errorMessage);
+      });
+  });
+};
+
+registerCommand('addPope', (message, log, _popeName) => {
+  if (!_popeName || !_popeName.length) {
+    log(
       `Received request from ${message.user} to add a pope, but no parameter was found`,
       VERBOSE_LOGGING
     );
-    Message.private(message.uer, 'You must provide a user name!');
-    return;
+    return Promise.reject('You must provide a user name!');
   }
 
-  Util.log('addPope', `Received request from ${message.user} to add ${popeName}`);
-  bot.api.users.listAsync({})
+  const popeName = _popeName[0] === '@' ? _popeName.substring(1) : _popeName;
+
+  return bot.api.users.listAsync({})
     .then(({ members }) => {
       const popeUser = _.find(members, (member) => member.name === popeName);
       if (!popeUser) {
-        Util.log('addPope', `User ${popeName} was not found, so no pope was added.`);
+        log(`User ${popeName} was not found, so no pope was added.`);
         return Promise.reject('User not found on slack - no user added.');
       }
 
       return Database.addSquidPope(popeUser);
     })
     .then((popeUser) => {
-      Util.log('addPope', `User ${popeName} (${popeUser}) added to end of pope queue.`);
+      log(`User ${popeName} (${popeUser}) added to end of pope queue.`);
       Message.private(message.user, 'Pope successfully added to end of queue.');
       Message.private(
         popeUser,
         'You have been added to the Squid Pope queue, making you eligible for Squid Pope duties.'
       );
-    })
-    .catch((reason) => {
-      const errorMessage = _.get(reason, 'message', reason);
-      Util.log('removePope', reason, VERBOSE_LOGGING);
-      Util.log('addPope', `Failed for reason: ${errorMessage}`);
-      Message.private(message.user, errorMessage);
     });
 });
 
-controller.hears([/removePope .+/], ['direct_message'], (_bot, message) => {
-  let popeName = message.text.split(' ')[1].toLowerCase();
-  if (popeName[0] === '@') {
-    popeName = popeName.substring(1);
-  }
-
-  if (!popeName) {
-    Util.log(
-      'removePope',
+registerCommand('removePope', (message, log, _popeName) => {
+  if (!_popeName || !_popeName.length) {
+    log(
       `Received request from ${message.user} to remove a pope, but no parameter was found`,
       VERBOSE_LOGGING
     );
-    Message.private(message.uer, 'You must provide a user name!');
-    return;
+    return Promise.reject('You must provide a user name!');
   }
-  Util.log('removePope', `Received request from ${message.user} to remove ${popeName}`);
-  bot.api.users.listAsync({})
+
+  const popeName = _popeName[0] === '@' ? _popeName.substring(1) : _popeName;
+
+  return bot.api.users.listAsync({})
     .then(({ members }) => {
       const popeUser = _.find(members, (member) => member.name === popeName);
       if (!popeUser) {
-        Util.log('removePope', `User ${popeName} was not found, so no pope was removed.`);
+        log(`User ${popeName} was not found, so no pope was removed.`);
         return Promise.reject('User not found on slack - no user removed.');
       }
 
       return Database.removeSquidPope(popeUser);
     })
     .then((popeUser) => {
-      Util.log('removePope', `User ${popeName} (${popeUser}) removed from the pope queue.`);
+      log(`User ${popeName} (${popeUser}) removed from the pope queue.`);
       Message.private(message.user, 'Pope successfully removed from queue.');
       Message.private(
         popeUser,
         'You have been removed from the Squid Pope queue - you will no longer be squid pope.'
       );
-    })
-    .catch((reason) => {
-      const errorMessage = _.get(reason, 'message', reason);
-      Util.log('removePope', reason, VERBOSE_LOGGING);
-      Util.log('removePope', `Failed for reason: ${errorMessage}`);
-      Message.private(message.user, errorMessage);
     });
 });
 
