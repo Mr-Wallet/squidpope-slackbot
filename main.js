@@ -40,9 +40,17 @@ controller.storage.channels = Promise.promisifyAll(controller.storage.channels);
 controller.storage.users = Promise.promisifyAll(controller.storage.users);
 
 // Helper that should really be part of the slack API to begin with
-const getUserByName = (userName) =>
-  bot.api.users.listAsync({})
+const getUserByName = (userName) => {
+  const strippedID = _.get((/^<@(U[^>]+)>$/).exec(userName), 1);
+  if (strippedID) {
+    return bot.api.users.infoAsync({ user: strippedID })
+      .then(({ user }) => user);
+  }
+
+  return bot.api.users.listAsync({})
     .then(({ members }) => _.find(members, ({ name }) => name === userName) || null);
+};
+
 
 /* ### INITALIZE BOT ### */
 bot.startRTM((error /* , _bot, _payload */) => {
@@ -202,8 +210,8 @@ registerCommand('deferPope', (message, log) =>
     })
 );
 
-registerCommand('addPope', (message, log, _popeName) => {
-  if (!_popeName || !_popeName.length) {
+registerCommand('addPope', (message, log, popeNameOrTaggedId) => {
+  if (!_.get(popeNameOrTaggedId, 'length')) {
     log(
       `Received request from ${message.user} to add a pope, but no parameter was found`,
       VERBOSE_LOGGING
@@ -211,14 +219,15 @@ registerCommand('addPope', (message, log, _popeName) => {
     return Promise.reject('You must provide a user name!');
   }
 
-  const popeName = _popeName[0] === '@' ? _popeName.substring(1) : _popeName;
-
-  return getUserByName(popeName)
+  let popeName;
+  return getUserByName(popeNameOrTaggedId)
     .then((popeUser) => {
       if (!popeUser) {
-        log(`User ${popeName} was not found, so no pope was added.`);
+        log(`User ${popeNameOrTaggedId} was not found, so no pope was added.`);
         return Promise.reject('User not found on slack - no user added.');
       }
+
+      popeName = popeUser.name;
 
       return Database.addSquidPope(popeUser);
     })
@@ -232,8 +241,8 @@ registerCommand('addPope', (message, log, _popeName) => {
     });
 });
 
-registerCommand('removePope', (message, log, _popeName) => {
-  if (!_popeName || !_popeName.length) {
+registerCommand('removePope', (message, log, popeNameOrTaggedId) => {
+  if (!_.get(popeNameOrTaggedId, 'length')) {
     log(
       `Received request from ${message.user} to remove a pope, but no parameter was found`,
       VERBOSE_LOGGING
@@ -241,14 +250,15 @@ registerCommand('removePope', (message, log, _popeName) => {
     return Promise.reject('You must provide a user name!');
   }
 
-  const popeName = _popeName[0] === '@' ? _popeName.substring(1) : _popeName;
-
-  return getUserByName(popeName)
+  let popeName;
+  return getUserByName(popeNameOrTaggedId)
     .then((popeUser) => {
       if (!popeUser) {
-        log(`User ${popeName} was not found, so no pope was removed.`);
+        log(`User ${popeNameOrTaggedId} was not found, so no pope was removed.`);
         return Promise.reject('User not found on slack - no user removed.');
       }
+
+      popeName = popeUser.name;
 
       return Database.removeSquidPope(popeUser);
     })
