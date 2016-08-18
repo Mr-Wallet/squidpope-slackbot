@@ -143,6 +143,38 @@ registerCommand('removePope', (message, log, _popeName) => {
     });
 });
 
+registerCommand('cyclePope', (message, log) => {
+  Database.getPopes()
+    .then((popes) => {
+      if (popes.length < 2) {
+        log('Not enough popes to perform cycling behavior - aborting.');
+        return Promise.reject('There must be at least two popes to cycle to the next one!');
+      }
+
+      const currentPope = popes.shift();
+      popes.push(currentPope);
+
+      return Promise.all([bot.api.users.listAsync({}), Database.setPopes(popes)]);
+    })
+    .then(([{ members }, popes]) => {
+      const previousPope = _.last(popes);
+      const currentPope = popes[0];
+      const previousPopeName = _.find(members, ({ id }) => id === previousPope).name;
+      const currentPopeName = _.find(members, ({ id }) => id === previousPope).name;
+
+      log(
+        `User ${previousPopeName} (${previousPope}) was cycled out of pope and ` +
+        `${currentPopeName} (${currentPope}) cycled in.`
+      );
+      Message.private(
+        message.user,
+        `Squid popes cycled. ${previousPopeName} has been replaced by ${currentPopeName} as squid pope.`
+      );
+      Message.private(previousPope, 'You are no longer squid pope.');
+      Message.private(currentPope, 'You are now squid pope.');
+    });
+});
+
 registerCommand('list', (message, log) =>
   Promise.all([bot.api.users.listAsync({}), Database.getPopes()])
     .then(([{ members }, popes]) => {
@@ -174,7 +206,7 @@ controller.hears([/.+/], ['direct_message', 'mention'], (_bot, message) => {
   Util.log('message', `Passively got a mention/message from ${message.user}`, VERBOSE_LOGGING);
   bot.api.users.infoAsync({ user: message.user })
     .then(({ user: sender }) => {
-      const channelName = 'private message';
+      const channelName = message.channel;
       Util.log('message', `${sender.name}, @squidpope via ${channelName}: ${message.text}`);
       Message.squidPope(`${sender.name} (${channelName}): ${message.text}`);
     });
