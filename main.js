@@ -27,12 +27,13 @@ const bot = controller.spawn({
 
 const Database = require('./source/Database.js')(controller, bot, LOGGING_LEVEL);
 const Message = require('./source/Message.js')(controller, bot, LOGGING_LEVEL);
-const Util = require('./source/Util.js')(LOGGING_LEVEL);
+const Util = require('./source/Util.js')(controller, bot, LOGGING_LEVEL);
 
 
 /* ### PROMISIFY API CALLS - turns e.g. channels.info into channels.infoAsync which returns a promise ### */
 bot.api.chat = Promise.promisifyAll(bot.api.chat);
 bot.api.channels = Promise.promisifyAll(bot.api.channels);
+bot.api.groups = Promise.promisifyAll(bot.api.groups);
 bot.api.im = Promise.promisifyAll(bot.api.im);
 bot.api.users = Promise.promisifyAll(bot.api.users);
 controller.storage.channels = Promise.promisifyAll(controller.storage.channels);
@@ -143,7 +144,7 @@ registerCommand('removePope', (message, log, _popeName) => {
     });
 });
 
-registerCommand('cyclePope', (message, log) => {
+registerCommand('cyclePope', (message, log) =>
   Database.getPopes()
     .then((popes) => {
       if (popes.length < 2) {
@@ -160,7 +161,7 @@ registerCommand('cyclePope', (message, log) => {
       const previousPope = _.last(popes);
       const currentPope = popes[0];
       const previousPopeName = _.find(members, ({ id }) => id === previousPope).name;
-      const currentPopeName = _.find(members, ({ id }) => id === previousPope).name;
+      const currentPopeName = _.find(members, ({ id }) => id === currentPope).name;
 
       log(
         `User ${previousPopeName} (${previousPope}) was cycled out of pope and ` +
@@ -172,8 +173,8 @@ registerCommand('cyclePope', (message, log) => {
       );
       Message.private(previousPope, 'You are no longer squid pope.');
       Message.private(currentPope, 'You are now squid pope.');
-    });
-});
+    })
+);
 
 registerCommand('list', (message, log) =>
   Promise.all([bot.api.users.listAsync({}), Database.getPopes()])
@@ -202,11 +203,10 @@ registerCommand('list', (message, log) =>
     })
 );
 
-controller.hears([/.+/], ['direct_message', 'mention'], (_bot, message) => {
+controller.hears([/.+/], ['direct_message', 'direct_mention', 'mention'], (_bot, message) => {
   Util.log('message', `Passively got a mention/message from ${message.user}`, VERBOSE_LOGGING);
-  bot.api.users.infoAsync({ user: message.user })
-    .then(({ user: sender }) => {
-      const channelName = message.channel;
+  Promise.all([bot.api.users.infoAsync({ user: message.user }), Util.getChannelName(message.channel)])
+    .then(([{ user: sender }, channelName]) => {
       Util.log('message', `${sender.name}, @squidpope via ${channelName}: ${message.text}`);
       Message.squidPope(`${sender.name} (${channelName}): ${message.text}`);
     });

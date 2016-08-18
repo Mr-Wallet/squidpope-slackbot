@@ -1,7 +1,23 @@
 const moment = require('moment');
 
-module.exports = (logLevel) => {
+module.exports = (controller, bot, logLevel) => {
   const Util = {
+    getChannelName: (channel) => {
+      const typeCode = channel[0];
+      switch (typeCode) {
+        case 'C':
+          return bot.api.channels.infoAsync({ channel })
+            .then(({ channel: { name } }) => `In channel \`${name}\``);
+        case 'D':
+          return Promise.resolve('Private messaged me');
+        case 'G':
+          return bot.api.groups.infoAsync({ channel })
+            .then(({ group: { name } }) => `In private channel \`${name}\``);
+        default:
+          return Promise.resolve('Unknown source');
+      }
+    },
+
     log: (type, message, level = 1) => {
       const theTime = moment();
       if (!type) {
