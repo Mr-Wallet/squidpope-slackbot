@@ -84,6 +84,118 @@ const registerCommand = (command, callback, types = ['direct_message']) => {
   });
 };
 
+registerCommand('help', (message, log) => {
+  return Promise.resolve()
+    .then(() => {
+      /* eslint-disable max-len */
+      Message.private(
+        message.user,
+        'Any time I am mentioned, I\'ll pass it along to the current Squid Pope.' +
+        '\nI will also pass along any direct messages that I don\'t recognize as a command.' +
+        '\nBesides this `help` command, I know the following commands:' +
+        '\n`list` lists the current queue of squid popes.' +
+        '\n`cyclePope` puts the current pope at the end of the queue.' +
+        '\n`deferPope` swaps the current and next popes. Use this when the scheduled pope is unavailable for the week.' +
+        '\n`addPope user-name` adds a user to the end of the squid pope queue.' +
+        '\n`removePope user-name` removes a user from the squid pope queue. *NOTE:* If the current pope is removed, the next user becomes pope but _is not automatically notified._'
+      );
+      /* eslint-enable max-len */
+    });
+});
+
+registerCommand('list', (message, log) =>
+  Promise.all([bot.api.users.listAsync({}), Database.getPopes()])
+    .then(([{ members }, popes]) => {
+      const humanReadablePopes = _.map(popes, (popeId) => _.find(members, ({ id }) => id === popeId).name);
+      log(`${message.user} was given the squid pope list`);
+      log(`Squid pope list is as follows: ${JSON.stringify(humanReadablePopes)}`, VERBOSE_LOGGING);
+      if (!humanReadablePopes.length) {
+        Message.private(message.user, 'There are no squid popes registered! Use `addPope user-name` to add one.');
+        return;
+      }
+      if (humanReadablePopes.length === 1) {
+        Message.private(message.user, `The only registered squid pope is ${humanReadablePopes[0]}.`);
+        return;
+      }
+      const currentPope = humanReadablePopes.shift();
+      let popeMessage = `The current pope is ${currentPope}.`;
+      if (humanReadablePopes.length === 1) {
+        popeMessage += `\nThe off-duty pope is ${humanReadablePopes[0]}`;
+      } else {
+        const lastPope = humanReadablePopes.pop();
+        popeMessage += `\nThe upcoming popes, in order, are ${_.join(humanReadablePopes, ', ')}` +
+          `${humanReadablePopes.length > 1 ? ',' : ''} and ${lastPope}`;
+      }
+      Message.private(message.user, popeMessage);
+    })
+);
+
+registerCommand('cyclePope', (message, log) =>
+  Database.getPopes()
+    .then((popes) => {
+      if (popes.length < 2) {
+        log('Not enough popes to perform cycling behavior - aborting.');
+        return Promise.reject('There must be at least two popes to cycle to the next one!');
+      }
+
+      const currentPope = popes.shift();
+      popes.push(currentPope);
+
+      return Promise.all([bot.api.users.listAsync({}), Database.setPopes(popes)]);
+    })
+    .then(([{ members }, popes]) => {
+      const previousPope = _.last(popes);
+      const currentPope = popes[0];
+      const previousPopeName = _.find(members, ({ id }) => id === previousPope).name;
+      const currentPopeName = _.find(members, ({ id }) => id === currentPope).name;
+
+      log(
+        `User ${previousPopeName} (${previousPope}) was cycled out of pope and ` +
+        `${currentPopeName} (${currentPope}) cycled in.`
+      );
+      Message.private(
+        message.user,
+        `Squid popes cycled. ${previousPopeName} has been replaced by ${currentPopeName} as squid pope.`
+      );
+      Message.private(previousPope, 'You are no longer squid pope.');
+      Message.private(currentPope, 'You are now squid pope.');
+    })
+);
+
+registerCommand('deferPope', (message, log) =>
+  Database.getPopes()
+    .then((popes) => {
+      if (popes.length < 2) {
+        log('Not enough popes to perform deferring behavior - aborting.');
+        return Promise.reject('There must be at least two popes to defer the current one for a week!');
+      }
+
+      const deferredPope = popes.shift();
+      const newPope = popes.shift();
+      popes.unshift(deferredPope);
+      popes.unshift(newPope);
+
+      return Promise.all([bot.api.users.listAsync({}), Database.setPopes(popes)]);
+    })
+    .then(([{ members }, popes]) => {
+      const deferredPope = popes[1];
+      const currentPope = popes[0];
+      const deferredPopeName = _.find(members, ({ id }) => id === deferredPope).name;
+      const currentPopeName = _.find(members, ({ id }) => id === currentPope).name;
+
+      log(
+        `User ${deferredPopeName} (${deferredPope}) was deferred as pope for a week in favor of ` +
+        `${currentPopeName} (${currentPope}).`
+      );
+      Message.private(
+        message.user,
+        `${deferredPopeName} will now be squid pope _next_. The current pope is now ${currentPopeName}.`
+      );
+      Message.private(deferredPope, 'You are no longer squid pope.');
+      Message.private(currentPope, 'You are now squid pope.');
+    })
+);
+
 registerCommand('addPope', (message, log, _popeName) => {
   if (!_popeName || !_popeName.length) {
     log(
@@ -143,65 +255,6 @@ registerCommand('removePope', (message, log, _popeName) => {
       );
     });
 });
-
-registerCommand('cyclePope', (message, log) =>
-  Database.getPopes()
-    .then((popes) => {
-      if (popes.length < 2) {
-        log('Not enough popes to perform cycling behavior - aborting.');
-        return Promise.reject('There must be at least two popes to cycle to the next one!');
-      }
-
-      const currentPope = popes.shift();
-      popes.push(currentPope);
-
-      return Promise.all([bot.api.users.listAsync({}), Database.setPopes(popes)]);
-    })
-    .then(([{ members }, popes]) => {
-      const previousPope = _.last(popes);
-      const currentPope = popes[0];
-      const previousPopeName = _.find(members, ({ id }) => id === previousPope).name;
-      const currentPopeName = _.find(members, ({ id }) => id === currentPope).name;
-
-      log(
-        `User ${previousPopeName} (${previousPope}) was cycled out of pope and ` +
-        `${currentPopeName} (${currentPope}) cycled in.`
-      );
-      Message.private(
-        message.user,
-        `Squid popes cycled. ${previousPopeName} has been replaced by ${currentPopeName} as squid pope.`
-      );
-      Message.private(previousPope, 'You are no longer squid pope.');
-      Message.private(currentPope, 'You are now squid pope.');
-    })
-);
-
-registerCommand('list', (message, log) =>
-  Promise.all([bot.api.users.listAsync({}), Database.getPopes()])
-    .then(([{ members }, popes]) => {
-      const humanReadablePopes = _.map(popes, (popeId) => _.find(members, ({ id }) => id === popeId).name);
-      log(`${message.user} was given the squid pope list`);
-      log(`Squid pope list is as follows: ${JSON.stringify(humanReadablePopes)}`, VERBOSE_LOGGING);
-      if (!humanReadablePopes.length) {
-        Message.private(message.user, 'There are no squid popes registered! Use `addPope [user_name]` to add one.');
-        return;
-      }
-      if (humanReadablePopes.length === 1) {
-        Message.private(message.user, `The only registered squid pope is ${humanReadablePopes[0]}.`);
-        return;
-      }
-      const currentPope = humanReadablePopes.shift();
-      let popeMessage = `The current pope is ${currentPope}.`;
-      if (humanReadablePopes.length === 1) {
-        popeMessage += `\nThe off-duty pope is ${humanReadablePopes[0]}`;
-      } else {
-        const lastPope = humanReadablePopes.pop();
-        popeMessage += `\nThe upcoming popes, in order, are ${_.join(humanReadablePopes, ', ')}` +
-          `${humanReadablePopes.length > 1 ? ',' : ''} and ${lastPope}`;
-      }
-      Message.private(message.user, popeMessage);
-    })
-);
 
 controller.hears([/.+/], ['direct_message', 'direct_mention', 'mention'], (_bot, message) => {
   Util.log('message', `Passively got a mention/message from ${message.user}`, VERBOSE_LOGGING);
