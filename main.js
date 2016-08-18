@@ -158,7 +158,10 @@ registerCommand('cyclePope', (message, log) =>
         `Squid popes cycled. ${previousPopeName} has been replaced by ${currentPopeName} as squid pope.`
       );
       Message.private(previousPope, 'You are no longer squid pope.');
-      Message.private(currentPope, 'You are now squid pope.');
+      Message.private(
+        currentPope,
+        `You are now squid pope. If you are ever overwhelmed, just remember: \n"${Util.getDevQuote()}"`
+      );
     })
 );
 
@@ -192,7 +195,10 @@ registerCommand('deferPope', (message, log) =>
         `${deferredPopeName} will now be squid pope _next_. The current pope is now ${currentPopeName}.`
       );
       Message.private(deferredPope, 'You are no longer squid pope.');
-      Message.private(currentPope, 'You are now squid pope.');
+      Message.private(
+        currentPope,
+        `You are now squid pope. If you are ever overwhelmed, just remember: \n"${Util.getDevQuote()}"`
+      );
     })
 );
 

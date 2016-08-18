@@ -1,4 +1,6 @@
+const _ = require('lodash');
 const moment = require('moment');
+const devQuotes = require('../resources/dev-quotes.js');
 
 module.exports = (controller, bot, logLevel) => {
   const Util = {
@@ -17,6 +19,8 @@ module.exports = (controller, bot, logLevel) => {
           return Promise.resolve('Unknown source');
       }
     },
+
+    getDevQuote: () => _.sample(devQuotes),
 
     log: (type, message, level = 1) => {
       const theTime = moment();
