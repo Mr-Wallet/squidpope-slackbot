@@ -1,7 +1,7 @@
 const Botkit = require('botkit');
 const Promise = require('bluebird');
 const _ = require('lodash');
-const moment = require('moment');
+// const moment = require('moment');
 
 const BOT_TOKEN = require('./token.js');
 const {
@@ -92,8 +92,8 @@ const registerCommand = (command, callback, types = ['direct_message']) => {
   });
 };
 
-registerCommand('help', (message, log) => {
-  return Promise.resolve()
+registerCommand('help', (message /* , log */) =>
+  Promise.resolve()
     .then(() => {
       /* eslint-disable max-len */
       Message.private(
@@ -108,8 +108,8 @@ registerCommand('help', (message, log) => {
         '\n`removePope user-name` removes a user from the squid pope queue. *NOTE:* If the current pope is removed, the next user becomes pope but _is not automatically notified._'
       );
       /* eslint-enable max-len */
-    });
-});
+    })
+);
 
 registerCommand('list', (message, log) =>
   Promise.all([bot.api.users.listAsync({}), Database.getPopes()])
@@ -149,9 +149,14 @@ registerCommand('cyclePope', (message, log) =>
       const currentPope = popes.shift();
       popes.push(currentPope);
 
-      return Promise.all([bot.api.users.listAsync({}), Database.setPopes(popes)]);
+      return Promise.all([
+        bot.api.users.listAsync({}),
+        Database.setPopes(popes),
+        Util.getInterdimensionalYouTube()
+          .catch(() => { /* We don't really care if this one fails */ })
+      ]);
     })
-    .then(([{ members }, popes]) => {
+    .then(([{ members }, popes, youTubeLink]) => {
       const previousPope = _.last(popes);
       const currentPope = popes[0];
       const previousPopeName = _.find(members, ({ id }) => id === previousPope).name;
@@ -165,7 +170,11 @@ registerCommand('cyclePope', (message, log) =>
         message.user,
         `Squid popes cycled. ${previousPopeName} has been replaced by ${currentPopeName} as squid pope.`
       );
-      Message.private(previousPope, 'You are no longer squid pope.');
+      const exitMessage = `You are no longer squid pope.\n${youTubeLink ?
+        `For all your hard work, here\'s a YouTube video that I think a human like you will enjoy: ${youTubeLink}` :
+        'I tried to find a YouTube video to reward you, but something went wrong. Please inform your squid pope administrator.' // eslint-disable-line max-len
+      }`;
+      Message.private(previousPope, exitMessage);
       Message.private(
         currentPope,
         `You are now squid pope. If you are ever overwhelmed, just remember: \n"${Util.getDevQuote()}"`

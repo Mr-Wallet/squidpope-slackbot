@@ -13,5 +13,6 @@ module.exports = [
   'I don\'t want to be held accountable for anything I say.',
   'It\'s hard not to be racist.',
   'No one wants to salt their hot dog.',
-  'If a ball cannot fit in your mouth, its not yours.'
+  'If a ball cannot fit in your mouth, its not yours.',
+  'Get busy process.nextTick(flush), or get busy proces.exit(1).'
 ];
