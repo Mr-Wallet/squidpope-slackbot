@@ -9,7 +9,7 @@ const {
 } = require('../resources/logging-constants');
 
 module.exports = (controller, bot, LOGGING_LEVEL = 1) => {
-  const Util = require('./Util.js')(LOGGING_LEVEL); // eslint-disable-line global-require
+  const Util = require('./Util.js')(controller, bot, LOGGING_LEVEL); // eslint-disable-line global-require
 
   const Database = {
     addSquidPope: ({ id }) => {
