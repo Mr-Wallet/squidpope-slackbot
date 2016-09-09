@@ -63,8 +63,7 @@ bot.startRTM((error /* , _bot, _payload */) => {
  * Convenience method for setting up a command that the bot will respond to, complete with easy logging/errors.
  * @param {String} command The first word the bot hears, which is the "command".
  *                         Not case sensitive except for what gets logged.
- * @param {Function} callback What the command does. This MUST RETURN A PROMISE. registerCommand tacks a `catch` on the
- *                            end of the callback for error handling, so the meat of the callback should be promisified.
+ * @param {Function} callback What the command does.
  *                            callback takes the arguments (message, log, ...params) where:
  *                              message is the slack API message object
  *                              log is Util.log, partially applied with `command` as its first parameter - use this for
@@ -82,7 +81,7 @@ const registerCommand = (command, callback, types = ['direct_message']) => {
     params.shift();
     const log = _.partial(Util.log, command);
     log(`Received request from ${message.user}: ${message.text}`);
-    callback(message, log, ...params)
+    Promise.method(callback)(message, log, ...params)
       .catch((reason) => {
         const errorMessage = _.get(reason, 'message', reason);
         log(reason, VERBOSE_LOGGING);
@@ -92,24 +91,21 @@ const registerCommand = (command, callback, types = ['direct_message']) => {
   });
 };
 
-registerCommand('help', (message /* , log */) =>
-  Promise.resolve()
-    .then(() => {
-      /* eslint-disable max-len */
-      Message.private(
-        message.user,
-        'Any time I am mentioned, I\'ll pass it along to the current Squid Pope.' +
-        '\nI will also pass along any direct messages that I don\'t recognize as a command.' +
-        '\nBesides this `help` command, I know the following commands:' +
-        '\n`list` lists the current queue of squid popes.' +
-        '\n`cyclePope` puts the current pope at the end of the queue.' +
-        '\n`deferPope` swaps the current and next popes. Use this when the scheduled pope is unavailable for the week.' +
-        '\n`addPope user-name` adds a user to the end of the squid pope queue.' +
-        '\n`removePope user-name` removes a user from the squid pope queue. *NOTE:* If the current pope is removed, the next user becomes pope but _is not automatically notified._'
-      );
-      /* eslint-enable max-len */
-    })
-);
+registerCommand('help', (message /* , log */) => {
+  /* eslint-disable max-len */
+  Message.private(
+    message.user,
+    'Any time I am mentioned, I\'ll pass it along to the current Squid Pope.' +
+    '\nI will also pass along any direct messages that I don\'t recognize as a command.' +
+    '\nBesides this `help` command, I know the following commands:' +
+    '\n`list` lists the current queue of squid popes.' +
+    '\n`cyclePope` puts the current pope at the end of the queue.' +
+    '\n`deferPope` swaps the current and next popes. Use this when the scheduled pope is unavailable for the week.' +
+    '\n`addPope user-name` adds a user to the end of the squid pope queue.' +
+    '\n`removePope user-name` removes a user from the squid pope queue. *NOTE:* If the current pope is removed, the next user becomes pope but _is not automatically notified._'
+  );
+  /* eslint-enable max-len */
+});
 
 registerCommand('list', (message, log) =>
   Promise.all([bot.api.users.listAsync({}), Database.getPopes()])
