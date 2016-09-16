@@ -38,13 +38,18 @@ module.exports = (controller, bot, logLevel) => {
         });
 
         response.on('end', () => {
-          const redditResponse = JSON.parse(json);
-          const videoPost = _.find(
-            redditResponse.data.children,
-            ({ data }) => !data.is_self && data.url.includes('https://www.youtube.com/watch?')
-          );
+          try {
+            const redditResponse = JSON.parse(json);
+            const videoPost = _.find(
+              redditResponse.data.children,
+              ({ data }) => !data.is_self && data.url.includes('https://www.youtube.com/watch?')
+            );
 
-          resolve(videoPost.data.url);
+            resolve(videoPost.data.url);
+          } catch (e) {
+            this.log('getRedditPost', e, ONLY_ERROR_LOGGING);
+            reject(e);
+          }
         });
       });
       request.on('error', (err) => {
