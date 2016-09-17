@@ -1,5 +1,5 @@
 const _ = require('lodash');
-const http = require('http');
+const https = require('https');
 const moment = require('moment');
 
 const devQuotes = require('../resources/dev-quotes.js');
@@ -30,9 +30,9 @@ module.exports = (controller, bot, logLevel) => {
   Util.getDevQuote = () => _.sample(devQuotes);
 
   Util.getInterdimensionalYouTube = () => new Promise((resolve, reject) => {
-    const url = 'http://www.reddit.com/r/InterdimensionalCable/.json?limit=5';
+    const url = 'https://www.reddit.com/r/InterdimensionalCable/.json?limit=5';
 
-    const request = http.get(url, (response) => {
+    const request = https.get(url, (response) => {
       let json = '';
       response.on('data', (chunk) => {
         json += chunk;
