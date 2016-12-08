@@ -14,5 +14,6 @@ module.exports = [
   'It\'s hard not to be racist.',
   'No one wants to salt their hot dog.',
   'If a ball cannot fit in your mouth, its not yours.',
-  'Get busy process.nextTick(flush), or get busy proces.exit(1).'
+  'Get busy process.nextTick(flush), or get busy process.exit(1).',
+  'You don\'t love your dog if you ride it to work every morning.'
 ];
